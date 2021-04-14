@@ -3,6 +3,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/time.h>
 #include <vector>
 #include <string>
 #include <queue>
@@ -10,10 +11,10 @@
 #include <boost/bind.hpp>
 #include <iostream>
 #include <errno.h>
-
-//#define TEST
+#include <thread>
 
 using namespace std;
+
 
 class client {
 public:
@@ -24,6 +25,9 @@ public:
     char *recv_buf;
     int recv_len;
 
+    bool sock_close_flag;
+
+    vector<long long> latency;
 
     client() : socket(io_s) {
         recv_buf = (char *)malloc(1061);
@@ -40,21 +44,38 @@ public:
         boost::asio::ip::tcp::resolver resolver(io_s);
         //port와 host주소를 소켓에 넣음
         boost::asio::connect(socket, resolver.resolve({host, port}));
+        sock_close_flag = false;
     }
 
     void send_req(string& msg){
         
         boost::asio::write(socket, boost::asio::buffer(msg, msg.length()));
-        printf("%s", msg.c_str());
+//        printf("%s", msg.c_str());
 
         //cout << msg << endl;
 
     }
+    void close(){
+        socket.close();
+        sock_close_flag==true;
+    }
+
+    static long long ustime(void){
+        struct timeval tv;
+        long long ust;
+        gettimeofday(&tv, NULL);
+        ust= ((long)tv.tv_sec)*1000000;
+        ust+=tv.tv_usec;
+        return ust;
+    }
 
     unsigned int recv_req(){
 
-        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 5));
-        
+        long long start, end;
+        start = ustime();   
+        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 100));
+        latency.push_back(ustime()-start);
+
         printf("%s", recv_buf);
 
         return reply_length;
@@ -107,38 +128,56 @@ public:
 
 }; 
 
+client c;
+
+void recv_data(){
+
+    int count=0;
+    while(1){
+        count++;
+        c.recv_req();
+        if(c.sock_close_flag == true) break;
+    }
+}
+
 int main(int argc, char* argv[]){
     try{
-        if(argc != 3){
+
+        if(argc != 4){
             cerr << "Usage : <host> <port> <operation number>" << endl;
             return 1;
         }
 
-        client c;
         unsigned int size;
         c.create_conn(argv[1], argv[2]);
         
-#ifdef TEST
-        string msg = "*3\r\n$3\r\nSET\r\n$3\r\nbbb\r\n$5\r\nvalue\r\n";
-        //string msg = "*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n";
-        //string msg = "*2\r\n$3\r\nGET\r\n$3\r\nbbb\r\n";
-        c.send_req(msg);
-        size=c.recv_req();
-        string msg1 = "*2\r\n$3\r\nGET\r\n$3\r\nbbb\r\n";
-        c.send_req(msg1);
-        size=c.recv_req();
-#else
 		int count=0;
 		int operation_count = atoi(argv[3]);
+        thread tid(recv_data);
+
         while(1){
 			bool flag=true;
             c.create_request(count, flag);
 			count++;
 			if(count == operation_count) break;
         }
-#endif
-        c.socket.close();
 
+        count=0;
+        while(1){
+			bool flag=false;
+            c.create_request(count, flag);
+			count++;
+			if(count == operation_count) break;
+        }
+        
+        long long average;
+        for(auto x : c.latency){
+            average +=x;
+        }
+        cout << "average latency = " << average/(c.latency.size()) << endl;
+        c.close();
+
+        tid.join();
         printf("%d\n", size);
         //printf(" %s\n", c.recv_buf);
 

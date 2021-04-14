@@ -1,4 +1,4 @@
-#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
 
 #IncludeRegexScan: ^.*$
 
@@ -17,6 +17,8 @@ sys/socket.h
 -
 sys/un.h
 -
+sys/time.h
+-
 vector
 -
 string
@@ -30,5 +32,7 @@ boost/bind.hpp
 iostream
 -
 errno.h
+-
+thread
 -
 
