@@ -12,6 +12,7 @@
 #include <iostream>
 #include <errno.h>
 #include <thread>
+#include <random>
 
 using namespace std;
 
@@ -32,6 +33,7 @@ public:
     client() : socket(io_s) {
         recv_buf = (char *)malloc(1061);
         recv_len = 1060;
+//        socket.non_blocking(true);
     }
     ~client(){
         free(recv_buf);
@@ -50,9 +52,7 @@ public:
     void send_req(string& msg){
         
         boost::asio::write(socket, boost::asio::buffer(msg, msg.length()));
-//        printf("%s", msg.c_str());
 
-        //cout << msg << endl;
 
     }
     void close(){
@@ -73,10 +73,10 @@ public:
 
         long long start, end;
         start = ustime();   
-        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 100));
+        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 10));
         latency.push_back(ustime()-start);
 
-        printf("%s", recv_buf);
+//        printf("%s", recv_buf);
 
         return reply_length;
 
@@ -149,10 +149,17 @@ int main(int argc, char* argv[]){
         }
 
         unsigned int size;
+
+        long long average=0;
         c.create_conn(argv[1], argv[2]);
         
 		int count=0;
 		int operation_count = atoi(argv[3]);
+
+        random_device rd;
+        mt19937 gen(rd());
+        poisson_distribution<> d(operation_count);
+
         thread tid(recv_data);
 
         while(1){
@@ -160,7 +167,14 @@ int main(int argc, char* argv[]){
             c.create_request(count, flag);
 			count++;
 			if(count == operation_count) break;
+            usleep(d(gen));
         }
+        
+        for(auto x : c.latency){
+            average +=x;
+        }
+        cout << "set average latency = " << average/(c.latency.size()) << endl;
+
 
         count=0;
         while(1){
@@ -168,13 +182,15 @@ int main(int argc, char* argv[]){
             c.create_request(count, flag);
 			count++;
 			if(count == operation_count) break;
+
+            usleep(d(gen));
         }
         
-        long long average;
+        average=0;
         for(auto x : c.latency){
             average +=x;
         }
-        cout << "average latency = " << average/(c.latency.size()) << endl;
+        cout << "get average latency = " << average/(c.latency.size()) << endl;
         c.close();
 
         tid.join();
