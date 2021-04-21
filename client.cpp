@@ -26,15 +26,20 @@ public:
     boost::system::error_code error;
     char *recv_buf;
     int recv_len;
+    long long send_count;
+    long long read_count;
 
     bool sock_close_flag;
 
-    vector<long long> latency;
+    vector<long long> return_latency;
+    vector<long long> start_latency;
 
     client() : socket(io_s) {
         recv_buf = (char *)malloc(1061);
         recv_len = 1060;
         socket.non_blocking(true, error);
+        send_count=0;
+        read_count=0;
     }
     ~client(){
         free(recv_buf);
@@ -52,9 +57,12 @@ public:
 
     void send_req(string& msg){
         
+        long long start;
+        start = ustime();
         boost::asio::write(socket, boost::asio::buffer(msg, msg.length()));
-
-
+        start_latency.push_back(start);
+        send_count++;
+        
     }
     void close(){
         socket.close();
@@ -90,25 +98,29 @@ public:
 
     unsigned int recv_req(){
 
-        long long start, end;
-        start = ustime();   
-        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 1000));
-        end = ustime()-start;
+        if(read_count >=send_count) return 0;
+        long long end;  
+        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 22));
+        end = ustime()-start_latency[read_count];
 
-        vector<string> slice;
-        string tmp(recv_buf);
+//        printf("%s\n", recv_buf); 
+//        vector<string> slice;
+//        string tmp(recv_buf);
 
         if(boost::algorithm::contains(recv_buf, "+OK")){
-            slice = split(tmp, "+OK");
-            latency.push_back(end/slice.size());
+           // slice = split(tmp, "+OK");
+            return_latency.push_back(end);
+  //          printf("return latency = %lld\n", end);
+   //         printf("return_latency.size() = %ld", return_latency.size());
         }
         else{
-            slice = split(tmp, "j_bench");
-            latency.push_back(end/slice.size());
+  //          slice = split(tmp, "j_benchmark0000");
+            return_latency.push_back(end);
         }
 
 //        printf("%s", recv_buf);
       //  printf("\n");
+        read_count++;
 
         return reply_length;
 
@@ -121,8 +133,8 @@ public:
 			//flag == true -> SET
 			string key="j_bench";
 			key+=to_string(count);
-			string value = "j_benchmark";
-			value+=to_string(count);
+			string value = "j_benchmark0000";
+//			value+=to_string(count);
 		
 			string msg ="*3\r\n$3\r\nSET\r\n";
 			size = key.length();
@@ -202,10 +214,13 @@ int main(int argc, char* argv[]){
             usleep(d(gen));
         }
         
-        for(auto x : c.latency){
+        for(auto x : c.return_latency){
             average +=x;
+  //          printf("x = %lld \n", x);
+//            printf("average = %lld \n", average);
+
         }
-        cout << "set average latency = " << average/(c.latency.size()) << endl;
+        cout << "set average latency = " << average/(long long)c.return_latency.size() << "us" << endl;
 
 
         count=0;
@@ -218,11 +233,10 @@ int main(int argc, char* argv[]){
             usleep(d(gen));
         }
         average=0;
-        for(auto x : c.latency){
+        for(auto x : c.return_latency){
             average +=x;
         }
-        cout << "get average latency = " << average/(c.latency.size()) << endl;
-
+        cout << "get average latency = " << average/(c.return_latency.size()) << "us" << endl;
         c.close();
 
         tid.join();
