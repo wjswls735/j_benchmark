@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <thread>
 #include <random>
+#include <boost/algorithm/string.hpp>
 
 using namespace std;
 
@@ -33,7 +34,7 @@ public:
     client() : socket(io_s) {
         recv_buf = (char *)malloc(1061);
         recv_len = 1060;
-//        socket.non_blocking(true);
+        socket.non_blocking(true, error);
     }
     ~client(){
         free(recv_buf);
@@ -69,14 +70,45 @@ public:
         return ust;
     }
 
+    vector<string> split(const string &s, const string &sep){
+
+        std::vector<std::string> result;
+        int start = 0;
+        int end = 0;
+        std::string empty = "";
+        
+        //find를 통해 sep문자가 있는지 확인
+        //find를 통해 문자가 확인되면 substr으로 start지점부터 발견지점까지 잘라서 vector에 집어넣음
+        //문장이 empty이면 vector에 넣지않고 넘어감
+        while(end!=std::string::npos){
+            end = s.find(sep, start);
+            if(empty.compare(s.substr(start,end-start))) result.push_back(s.substr(start, end-start));
+            start = end + sep.length();
+        }
+        return result;
+    }
+
     unsigned int recv_req(){
 
         long long start, end;
         start = ustime();   
-        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 10));
-        latency.push_back(ustime()-start);
+        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 1000));
+        end = ustime()-start;
+
+        vector<string> slice;
+        string tmp(recv_buf);
+
+        if(boost::algorithm::contains(recv_buf, "+OK")){
+            slice = split(tmp, "+OK");
+            latency.push_back(end/slice.size());
+        }
+        else{
+            slice = split(tmp, "j_bench");
+            latency.push_back(end/slice.size());
+        }
 
 //        printf("%s", recv_buf);
+      //  printf("\n");
 
         return reply_length;
 
@@ -143,8 +175,8 @@ void recv_data(){
 int main(int argc, char* argv[]){
     try{
 
-        if(argc != 4){
-            cerr << "Usage : <host> <port> <operation number>" << endl;
+        if(argc != 5){
+            cerr << "Usage : <host> <port> <operation number> <lamda>" << endl;
             return 1;
         }
 
@@ -156,9 +188,8 @@ int main(int argc, char* argv[]){
 		int count=0;
 		int operation_count = atoi(argv[3]);
 
-        random_device rd;
-        mt19937 gen(rd());
-        poisson_distribution<> d(operation_count);
+        mt19937 gen(operation_count);
+        poisson_distribution<> d(atoi(argv[4]));
 
         thread tid(recv_data);
 
@@ -167,6 +198,7 @@ int main(int argc, char* argv[]){
             c.create_request(count, flag);
 			count++;
 			if(count == operation_count) break;
+//            printf("d(gen) = %d\n", d(gen));
             usleep(d(gen));
         }
         
@@ -185,12 +217,12 @@ int main(int argc, char* argv[]){
 
             usleep(d(gen));
         }
-        
         average=0;
         for(auto x : c.latency){
             average +=x;
         }
         cout << "get average latency = " << average/(c.latency.size()) << endl;
+
         c.close();
 
         tid.join();
