@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <thread>
 #include <random>
+#include <map>
 #include <boost/algorithm/string.hpp>
 
 using namespace std;
@@ -28,6 +29,7 @@ public:
     int recv_len;
     long long send_count;
     long long read_count;
+    map<string, string> key_value_table;
 
     bool sock_close_flag;
 
@@ -150,6 +152,8 @@ public:
 			msg+=("\r\n");
 			msg+=(value);
 			msg+=("\r\n");
+
+            key_value_table.insert(make_pair(key,value));
 
 			send_req(msg);
 		}
