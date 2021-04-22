@@ -37,7 +37,7 @@ public:
     client() : socket(io_s) {
         recv_buf = (char *)malloc(1061);
         recv_len = 1060;
-        socket.non_blocking(true, error);
+//        socket.non_blocking(true, error);
         send_count=0;
         read_count=0;
     }
@@ -174,8 +174,10 @@ public:
 
 client c;
 
-void recv_data(){
+void recv_data(bool th_flag){
 
+    printf("th_flag = %d\n", th_flag);
+    if(th_flag == false) return;
     int count=0;
     while(1){
         count++;
@@ -203,7 +205,13 @@ int main(int argc, char* argv[]){
         mt19937 gen(operation_count);
         poisson_distribution<> d(atoi(argv[4]));
 
-        thread tid(recv_data);
+        bool th_flag=true;
+        
+        if(atoi(argv[4]) == 0){
+           
+            th_flag=false;
+        }
+        thread tid(recv_data, th_flag);
 
         while(1){
 			bool flag=true;
@@ -211,7 +219,14 @@ int main(int argc, char* argv[]){
 			count++;
 			if(count == operation_count) break;
 //            printf("d(gen) = %d\n", d(gen));
-            usleep(d(gen));
+            if(atoi(argv[4]) == 0){
+                c.recv_req();
+            }
+            else{
+                usleep(d(gen));
+            }
+
+//            printf("%d " ,count);
         }
         
         for(auto x : c.return_latency){
@@ -229,8 +244,13 @@ int main(int argc, char* argv[]){
             c.create_request(count, flag);
 			count++;
 			if(count == operation_count) break;
+            if(atoi(argv[4]) == 0){
+                c.recv_req();
+            }
+            else{
+                usleep(d(gen));
+            }
 
-            usleep(d(gen));
         }
         average=0;
         for(auto x : c.return_latency){
@@ -238,8 +258,10 @@ int main(int argc, char* argv[]){
         }
         cout << "get average latency = " << average/(c.return_latency.size()) << "us" << endl;
         c.close();
-
-        tid.join();
+        
+        if(atoi(argv[4]) != 0){
+            tid.join();
+        }
         printf("%d\n", size);
         //printf(" %s\n", c.recv_buf);
 
