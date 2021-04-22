@@ -37,7 +37,7 @@ public:
     vector<long long> start_latency;
 
     client() : socket(io_s) {
-        recv_buf = (char *)malloc(1061);
+        recv_buf = (char *)malloc(1024*1024);
         recv_len = 1060;
 //        socket.non_blocking(true, error);
         send_count=0;
@@ -102,15 +102,15 @@ public:
 
         if(read_count >=send_count) return 0;
         long long end;  
-        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 22));
+        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 5));
         end = ustime()-start_latency[read_count];
 
-//        printf("%s\n", recv_buf); 
+//        printf("%s ------ \n", recv_buf); 
 //        vector<string> slice;
 //        string tmp(recv_buf);
 
         if(boost::algorithm::contains(recv_buf, "+OK")){
-           // slice = split(tmp, "+OK");
+//            slice = split(tmp, "+OK");
             return_latency.push_back(end);
   //          printf("return latency = %lld\n", end);
    //         printf("return_latency.size() = %ld", return_latency.size());
@@ -135,7 +135,14 @@ public:
 			//flag == true -> SET
 			string key="j_bench";
 			key+=to_string(count);
+            
 			string value = "j_benchmark0000";
+            char *xvalue;
+            xvalue = (char*)malloc(1024*1024);
+
+            memset(xvalue, 'x', 1024*1024*sizeof(char)-15); 
+            string xvalue2(xvalue);
+            value+=xvalue2;
 //			value+=to_string(count);
 		
 			string msg ="*3\r\n$3\r\nSET\r\n";
@@ -156,6 +163,7 @@ public:
             key_value_table.insert(make_pair(key,value));
 
 			send_req(msg);
+            free(xvalue);
 		}
 		else{
 			//flag == false -> GET
@@ -178,15 +186,14 @@ public:
 
 client c;
 
-void recv_data(bool th_flag){
+void recv_data(bool th_flag, int total){
 
     printf("th_flag = %d\n", th_flag);
     if(th_flag == false) return;
-    int count=0;
     while(1){
-        count++;
         c.recv_req();
         if(c.sock_close_flag == true) break;
+        if(c.read_count == total) break;
     }
 }
 
@@ -194,7 +201,7 @@ int main(int argc, char* argv[]){
     try{
 
         if(argc != 5){
-            cerr << "Usage : <host> <port> <operation number> <lamda>" << endl;
+            cerr << "Usage : <host> <port> <operation number> <lambda>" << endl;
             return 1;
         }
 
@@ -215,7 +222,7 @@ int main(int argc, char* argv[]){
            
             th_flag=false;
         }
-        thread tid(recv_data, th_flag);
+        thread tid(recv_data, th_flag, operation_count);
 
         while(1){
 			bool flag=true;
@@ -230,17 +237,18 @@ int main(int argc, char* argv[]){
                 usleep(d(gen));
             }
 
-//            printf("%d " ,count);
+//            printf("%d " ,d(gen));
         }
         
         for(auto x : c.return_latency){
             average +=x;
-  //          printf("x = %lld \n", x);
+//            printf("x = %lld \n", x);
 //            printf("average = %lld \n", average);
 
         }
         cout << "set average latency = " << average/(long long)c.return_latency.size() << "us" << endl;
 
+        /*
 
         count=0;
         while(1){
@@ -261,6 +269,7 @@ int main(int argc, char* argv[]){
             average +=x;
         }
         cout << "get average latency = " << average/(c.return_latency.size()) << "us" << endl;
+        */
         c.close();
         
         if(atoi(argv[4]) != 0){
