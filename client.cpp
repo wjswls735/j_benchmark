@@ -27,11 +27,13 @@ public:
     boost::system::error_code error;
     char *recv_buf;
     int recv_len;
+    int dsize;
     long long send_count;
     long long read_count;
     map<string, string> key_value_table;
 
     bool sock_close_flag;
+    bool set_flag;
 
     vector<long long> return_latency;
     vector<long long> start_latency;
@@ -80,6 +82,10 @@ public:
         return ust;
     }
 
+    void clear(){
+        start_latency.clear();
+        return_latency.clear();
+    }
     vector<string> split(const string &s, const string &sep){
 
         std::vector<std::string> result;
@@ -100,12 +106,18 @@ public:
 
     unsigned int recv_req(){
 
+        size_t reply_length=0;
         if(read_count >=send_count) return 0;
         long long end;  
-        size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 5));
+        if(set_flag == true){
+            reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 5));
+        }
+        else{
+            reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, dsize+3));
+        }
         end = ustime()-start_latency[read_count];
 
-        printf("%s ------ \n", recv_buf); 
+//        printf("%s ------ \n", recv_buf); 
 //        vector<string> slice;
 //        string tmp(recv_buf);
 
@@ -134,6 +146,8 @@ public:
 		if(flag == true){
 			//flag == true -> SET
 			string key="j_bench";
+            dsize = data_size;
+            set_flag = flag;
 			key+=to_string(count);
             
 			string value = "j_benchmark0000";
@@ -168,6 +182,8 @@ public:
 		else{
 			//flag == false -> GET
 			string key="j_bench";
+            dsize = data_size;
+            set_flag = flag;
 			key+=to_string(count);
 		
 			string msg ="*2\r\n$3\r\nGET\r\n";
@@ -248,7 +264,21 @@ int main(int argc, char* argv[]){
         }
         cout << "set average latency = " << average/(long long)c.return_latency.size() << "us" << endl;
 
+        c.close();
+
+        if(atoi(argv[4]) != 0){
+            tid.join();
+        }
         
+        c.create_conn(argv[1], argv[2]);
+        
+        th_flag=true;
+        
+        if(atoi(argv[4]) == 0){
+           
+            th_flag=false;
+        }
+        thread tid2(recv_data, th_flag, operation_count);
 
         count=0;
         while(1){
