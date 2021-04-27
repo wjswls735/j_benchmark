@@ -105,7 +105,7 @@ public:
         size_t reply_length = boost::asio::read(socket, boost::asio::buffer(recv_buf, 5));
         end = ustime()-start_latency[read_count];
 
-//        printf("%s ------ \n", recv_buf); 
+        printf("%s ------ \n", recv_buf); 
 //        vector<string> slice;
 //        string tmp(recv_buf);
 
@@ -128,7 +128,7 @@ public:
 
     }
 
-    void create_request(int count, bool flag){
+    void create_request(int count, bool flag, int data_size){
 	
 		int size;
 		if(flag == true){
@@ -138,9 +138,9 @@ public:
             
 			string value = "j_benchmark0000";
             char *xvalue;
-            xvalue = (char*)malloc(1024*1024);
+            xvalue = (char*)malloc(data_size*sizeof(char));
 
-            memset(xvalue, 'x', 1024*1024*sizeof(char)-15); 
+            memset(xvalue, 'x', data_size*sizeof(char)-15); 
             string xvalue2(xvalue);
             value+=xvalue2;
 //			value+=to_string(count);
@@ -200,8 +200,8 @@ void recv_data(bool th_flag, int total){
 int main(int argc, char* argv[]){
     try{
 
-        if(argc != 5){
-            cerr << "Usage : <host> <port> <operation number> <lambda>" << endl;
+        if(argc != 6){
+            cerr << "Usage : <host> <port> <operation number> <data_size> <lambda>" << endl;
             return 1;
         }
 
@@ -214,7 +214,7 @@ int main(int argc, char* argv[]){
 		int operation_count = atoi(argv[3]);
 
         mt19937 gen(operation_count);
-        poisson_distribution<> d(atoi(argv[4]));
+        poisson_distribution<> d(atoi(argv[5]));
 
         bool th_flag=true;
         
@@ -226,7 +226,7 @@ int main(int argc, char* argv[]){
 
         while(1){
 			bool flag=true;
-            c.create_request(count, flag);
+            c.create_request(count, flag, atoi(argv[4]));
 			count++;
 			if(count == operation_count) break;
 //            printf("d(gen) = %d\n", d(gen));
@@ -248,12 +248,12 @@ int main(int argc, char* argv[]){
         }
         cout << "set average latency = " << average/(long long)c.return_latency.size() << "us" << endl;
 
-        /*
+        
 
         count=0;
         while(1){
 			bool flag=false;
-            c.create_request(count, flag);
+            c.create_request(count, flag, atoi(argv[4]));
 			count++;
 			if(count == operation_count) break;
             if(atoi(argv[4]) == 0){
@@ -269,7 +269,8 @@ int main(int argc, char* argv[]){
             average +=x;
         }
         cout << "get average latency = " << average/(c.return_latency.size()) << "us" << endl;
-        */
+        
+
         c.close();
         
         if(atoi(argv[4]) != 0){
